@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Flowers | AI Assistant</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0a0508;
+      color: #f0e6f0;
+      height: 100dvh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Earth canvas - fullscreen background, no pointer events */
+    #earth-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      display: block;
+    }
+
+    /* Main app container - flex column, full height */
+    .app-container {
+      position: relative;
+      z-index: 10;
+      height: 100dvh;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      backdrop-filter: blur(3px);
+    }
+
+    /* Top bar (mobile friendly) */
+    .top-bar {
+      flex-shrink: 0;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid rgba(236, 72, 153, 0.3);
+      position: relative;
+      z-index: 20;
+    }
+
+    .menu-toggle {
+      background: none;
+      border: none;
+      color: #fbcfe8;
+      font-size: 1.6rem;
+      cursor: pointer;
+      padding: 8px;
+      display: flex;
+      align-items: center;
+    }
+
+    .brand {
+      font-size: 1.3rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #fbcfe8, #f472b6);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .controls {
+      margin-left: auto;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .model-selector, .lang-selector {
+      background: #1a0f15cc;
+      border: 1px solid #b93b7a;
+      padding: 5px 8px;
+      border-radius: 24px;
+      color: #fcd9e8;
+      font-size: 0.7rem;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+    }
+
+    .counter-badge {
+      background: #2d1220cc;
+      padding: 4px 8px;
+      border-radius: 24px;
+      font-size: 0.65rem;
+      backdrop-filter: blur(4px);
+      color: #fbcfe8;
+      border: 1px solid #ec4899;
+      white-space: nowrap;
+    }
+
+    /* Chat messages - scrollable area */
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+      min-height: 0; /* important for flex child to scroll */
+    }
+
+    .message {
+      display: flex;
+      max-width: 90%;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .user-message {
+      align-self: flex-end;
+    }
+
+    .assistant-message {
+      align-self: flex-start;
+    }
+
+    .bubble {
+      padding: 10px 14px;
+      border-radius: 22px;
+      background: #2d1a24dd;
+      backdrop-filter: blur(8px);
+      line-height: 1.4;
+      font-size: 0.9rem;
+      word-break: break-word;
+    }
+
+    .user-message .bubble {
+      background: linear-gradient(115deg, #9d174d, #ec4899);
+      color: white;
+    }
+
+    .generated-image {
+      max-width: 100%;
+      border-radius: 12px;
+      margin-top: 8px;
+      cursor: pointer;
+    }
+
+    .attachments-preview {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .preview-file {
+      background: rgba(0,0,0,0.5);
+      border-radius: 12px;
+      padding: 3px 8px;
+      font-size: 0.65rem;
+    }
+
+    /* Input area - fixed at bottom, visible */
+    .input-area {
+      flex-shrink: 0;
+      padding: 12px 16px 20px;
+      background: rgba(10,5,8,0.85);
+      backdrop-filter: blur(18px);
+      border-top: 1px solid rgba(236,72,153,0.3);
+    }
+
+    .attachment-area {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .attach-item {
+      background: #2d1a24;
+      border-radius: 20px;
+      padding: 3px 8px;
+      font-size: 0.7rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .input-container {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      background: #1a0f15;
+      border-radius: 40px;
+      padding: 5px 12px;
+      border: 1px solid #b93b7a;
+    }
+
+    textarea {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #fcd9e8;
+      font-size: 0.9rem;
+      resize: none;
+      outline: none;
+      font-family: 'Inter', sans-serif;
+      padding: 8px 4px;
+      max-height: 100px;
+    }
+
+    .input-buttons {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .icon-btn {
+      background: none;
+      border: none;
+      color: #d9b4cb;
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 6px;
+    }
+
+    .send-btn {
+      background: #ec4899;
+      border: none;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .warning-message {
+      text-align: center;
+      font-size: 0.7rem;
+      margin-top: 6px;
+      color: #f97316;
+    }
+
+    /* Sidebar (mobile slide-out) */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: -280px;
+      width: 280px;
+      height: 100%;
+      background: rgba(18, 8, 15, 0.96);
+      backdrop-filter: blur(24px);
+      border-right: 1px solid rgba(236, 72, 153, 0.4);
+      transition: left 0.3s ease;
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+      pointer-events: auto;
+    }
+
+    .sidebar.open {
+      left: 0;
+    }
+
+    .sidebar-header {
+      padding: 20px 20px 12px;
+      border-bottom: 1px solid rgba(236, 72, 153, 0.3);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .flower-logo {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #f472b6, #ec4899);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      box-shadow: 0 0 10px rgba(236,72,153,0.5);
+    }
+
+    .sidebar-header h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      background: linear-gradient(125deg, #fbcfe8, #ec4899);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .close-sidebar {
+      background: none;
+      border: none;
+      color: #d9b4cb;
+      font-size: 1.2rem;
+      cursor: pointer;
+      margin-left: auto;
+    }
+
+    .new-chat-btn {
+      margin: 16px 20px;
+      background: linear-gradient(105deg, #9d174d, #ec4899);
+      border: none;
+      padding: 10px;
+      border-radius: 40px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      color: white;
+    }
+
+    .chat-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 12px;
+    }
+
+    .chat-item {
+      padding: 12px 12px;
+      margin: 4px 0;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.05);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+    }
+
+    .chat-item.active {
+      background: rgba(236,72,153,0.4);
+      border-left: 3px solid #f472b6;
+    }
+
+    .chat-info {
+      flex: 1;
+    }
+
+    .chat-title {
+      font-weight: 600;
+    }
+
+    .chat-time {
+      font-size: 0.6rem;
+      opacity: 0.6;
+    }
+
+    .delete-chat {
+      background: none;
+      border: none;
+      color: #f472b6;
+      cursor: pointer;
+      font-size: 0.9rem;
+      padding: 6px;
+    }
+
+    .agent-prime-link {
+      margin: 12px 20px;
+      text-align: center;
+      padding: 8px;
+      background: rgba(236,72,153,0.2);
+      border-radius: 40px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: #fbcfe8;
+      border: 1px solid #ec4899;
+    }
+
+    .limit-section {
+      padding: 16px 20px;
+      border-top: 1px solid rgba(236,72,153,0.2);
+    }
+
+    .limit-item {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      margin-bottom: 6px;
+    }
+
+    /* Agent Prime Modal */
+    .agent-prime-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      backdrop-filter: blur(12px);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .agent-prime-modal.active {
+      display: flex;
+    }
+
+    .agent-prime-container {
+      width: 95%;
+      max-width: 500px;
+      height: 85vh;
+      background: rgba(15, 23, 42, 0.95);
+      border-radius: 28px;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(236,72,153,0.5);
+      box-shadow: 0 0 30px rgba(236,72,153,0.3);
+    }
+
+    .agent-prime-header {
+      padding: 14px 16px;
+      background: rgba(30, 41, 59, 0.9);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #ec4899;
+      border-radius: 28px 28px 0 0;
+    }
+
+    .agent-prime-header h3 {
+      font-size: 1.3rem;
+      background: linear-gradient(135deg, #fbcfe8, #ec4899);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .agent-limit-info {
+      font-size: 0.65rem;
+      background: #1e293b;
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+
+    .close-agent {
+      background: none;
+      border: none;
+      color: #f472b6;
+      font-size: 1.6rem;
+      cursor: pointer;
+    }
+
+    .agent-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .agent-message {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      word-wrap: break-word;
+    }
+
+    .agent-user {
+      background: linear-gradient(135deg, #ec4899, #f472b6);
+      align-self: flex-end;
+      color: white;
+    }
+
+    .agent-bot {
+      background: rgba(55, 65, 81, 0.8);
+      align-self: flex-start;
+    }
+
+    .agent-input-area {
+      display: flex;
+      padding: 12px;
+      background: #1e293b;
+      gap: 8px;
+      border-top: 1px solid #ec4899;
+      border-radius: 0 0 28px 28px;
+    }
+
+    .agent-input-area input {
+      flex: 1;
+      padding: 10px 14px;
+      border: none;
+      border-radius: 30px;
+      background: #0f172a;
+      color: white;
+      font-size: 0.85rem;
+    }
+
+    .agent-input-area button {
+      padding: 10px 18px;
+      border: none;
+      border-radius: 30px;
+      background: linear-gradient(135deg, #ec4899, #f472b6);
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 480px) {
+      .brand {
+        font-size: 1rem;
+      }
+      .counter-badge {
+        font-size: 0.55rem;
+        padding: 2px 6px;
+      }
+      .model-selector, .lang-selector {
+        font-size: 0.6rem;
+        padding: 3px 6px;
+      }
+      .top-bar {
+        padding: 10px 12px;
+      }
+      .bubble {
+        font-size: 0.85rem;
+        padding: 8px 12px;
+      }
+      .message {
+        max-width: 95%;
+      }
+      .sidebar {
+        width: 260px;
+      }
+      .input-area {
+        padding: 10px 12px 16px;
+      }
+    }
+
+    @media (max-width: 380px) {
+      .controls {
+        gap: 4px;
+      }
+      .brand {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+<canvas id="earth-canvas"></canvas>
+<div class="app-container">
+  <div class="top-bar">
+    <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
+    <div class="brand"><i class="fas fa-seedling" style="color:#f472b6;"></i> Flowers AI</div>
+    <div class="controls">
+      <select id="modelSwitch" class="model-selector">
+        <option value="hyacinth2">Hyacinth 2</option>
+        <option value="vision">Vision (Image Gen)</option>
+      </select>
+      <select id="languageSelect" class="lang-selector">
+        <option value="English">EN</option><option value="Spanish">ES</option><option value="French">FR</option>
+        <option value="German">DE</option><option value="Chinese">中文</option><option value="Japanese">日</option>
+        <option value="Korean">한</option><option value="Italian">IT</option>
+        <option value="Portuguese">PT</option><option value="Russian">RU</option><option value="Arabic">AR</option>
+        <option value="Hindi">HI</option><option value="Dutch">NL</option><option value="Turkish">TR</option><option value="Vietnamese">VI</option>
+      </select>
+      <div class="counter-badge" id="activeModelBadge">Hyacinth 2</div>
+    </div>
+  </div>
+
+  <div class="chat-messages" id="chatMessages"></div>
+
+  <div class="input-area">
+    <div id="attachmentPreviewList" class="attachment-area"></div>
+    <div class="input-container">
+      <textarea rows="1" id="userInput" placeholder="Message Flowers..."></textarea>
+      <div class="input-buttons">
+        <input type="file" id="fileInput" multiple style="display:none" accept="image/*, .txt, .pdf, .doc, .docx">
+        <button class="icon-btn" id="attachBtn"><i class="fas fa-paperclip"></i></button>
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+        <button class="icon-btn" id="cameraBtn"><i class="fas fa-camera"></i></button>
+        <button class="send-btn" id="sendBtn"><i class="fas fa-arrow-up"></i></button>
+      </div>
+    </div>
+    <div id="globalWarning" class="warning-message"></div>
+  </div>
+</div>
+
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="flower-logo"><i class="fas fa-seedling" style="color:#fff;"></i></div>
+    <h2>Flowers</h2>
+    <button class="close-sidebar" id="closeSidebarBtn"><i class="fas fa-times"></i></button>
+  </div>
+  <button class="new-chat-btn" id="newChatBtn"><i class="fas fa-plus-circle"></i> New chat</button>
+  <div class="chat-list" id="chatListContainer"></div>
+  <div class="agent-prime-link" id="agentPrimeBtn"><i class="fas fa-crown"></i> Agent Prime</div>
+  <div class="limit-section">
+    <div class="limit-item"><span>Hyacinth 2</span><span id="hyacinth2Counter">0/25</span></div>
+    <div class="limit-item"><span>Flowers Vision</span><span id="visionCounter">0/4</span></div>
+  </div>
+</div>
+
+<!-- Agent Prime Modal -->
+<div id="agentPrimeModal" class="agent-prime-modal">
+  <div class="agent-prime-container">
+    <div class="agent-prime-header">
+      <h3><i class="fas fa-crown"></i> Agent Prime</h3>
+      <div class="agent-limit-info" id="agentLimitInfo">50/50 left</div>
+      <button class="close-agent" id="closeAgentModal">&times;</button>
+    </div>
+    <div class="agent-messages" id="agentMessages">
+      <div class="agent-message agent-bot">Hello, I'm Agent Prime. How can I help?</div>
+    </div>
+    <div class="agent-input-area">
+      <input type="text" id="agentUserInput" placeholder="Ask me anything...">
+      <button id="agentSendBtn">Send</button>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+  { "imports": { "three": "https://unpkg.com/three@0.128.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/" } }
+</script>
+
+<script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+  // ---------- Earth ----------
+  const canvas = document.getElementById('earth-canvas');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x03050b);
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 0, 3.2);
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: false });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  const textureLoader = new THREE.TextureLoader();
+  const earthMap = textureLoader.load('https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg');
+  const earthSpecularMap = textureLoader.load('https://threejs.org/examples/textures/planets/earth_specular_2048.jpg');
+  const earthNormalMap = textureLoader.load('https://threejs.org/examples/textures/planets/earth_normal_2048.jpg');
+  const cloudMap = textureLoader.load('https://threejs.org/examples/textures/planets/earth_clouds_1024.png');
+  const earth = new THREE.Mesh(new THREE.SphereGeometry(1.2, 128, 128), new THREE.MeshPhongMaterial({ map: earthMap, specularMap: earthSpecularMap, specular: new THREE.Color('grey'), shininess: 5, normalMap: earthNormalMap }));
+  scene.add(earth);
+  const clouds = new THREE.Mesh(new THREE.SphereGeometry(1.21, 128, 128), new THREE.MeshPhongMaterial({ map: cloudMap, transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending }));
+  scene.add(clouds);
+  const starGeometry = new THREE.BufferGeometry();
+  const starPositions = new Float32Array(2000 * 3);
+  for (let i = 0; i < 2000; i++) { starPositions[i*3] = (Math.random()-0.5)*800; starPositions[i*3+1] = (Math.random()-0.5)*800; starPositions[i*3+2] = (Math.random()-0.5)*300-80; }
+  starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+  const stars = new THREE.Points(starGeometry, new THREE.PointsMaterial({ color: 0xffffff, size: 0.2, transparent: true, opacity: 0.6 }));
+  scene.add(stars);
+  scene.add(new THREE.AmbientLight(0x222222));
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1); dirLight.position.set(5,3,5); scene.add(dirLight);
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true; controls.autoRotate = true; controls.autoRotateSpeed = 0.6; controls.enableZoom = false; controls.enablePan = false;
+  function animate() { requestAnimationFrame(animate); controls.update(); clouds.rotation.y += 0.0005; stars.rotation.y += 0.0002; renderer.render(scene, camera); }
+  animate();
+  window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+
+  // ---------- API Keys ----------
+  const MISTRAL_API_KEY = "1ygmQ2hSq9FL9CIsuVRMCU9yIN6fufZs";
+  const VISION_API_KEY = "b0a1d9ff07604647918dad90658a78d3";
+  const GROQ_API_KEY = "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";
+  const MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions";
+  const MISTRAL_VISION_MODEL = "pixtral-12b-2409";
+
+  // ---------- Main App State ----------
+  let sessions = {};
+  let currentChatId = null;
+  let pendingFiles = [];
+  let isProcessing = false;
+  let dailyUsage = { hyacinth2Used: 0, visionUsed: 0, lastResetDate: null };
+  const HYACINTH2_LIMIT = 25, VISION_LIMIT = 4;
+
+  function loadData() {
+    const storedSessions = localStorage.getItem("flowers_sessions_mobile");
+    if (storedSessions) sessions = JSON.parse(storedSessions);
+    else { const newId = Date.now().toString(); sessions = { [newId]: { title: "New Chat", createdAt: Date.now(), messages: [] } }; currentChatId = newId; }
+    if (!currentChatId || !sessions[currentChatId]) currentChatId = Object.keys(sessions)[0];
+    const storedCounts = localStorage.getItem("flowers_daily_limits_mobile");
+    if (storedCounts) dailyUsage = JSON.parse(storedCounts);
+    const today = new Date().toDateString();
+    if (dailyUsage.lastResetDate !== today) {
+      dailyUsage = { hyacinth2Used: 0, visionUsed: 0, lastResetDate: today };
+      localStorage.setItem("flowers_daily_limits_mobile", JSON.stringify(dailyUsage));
+    }
+    updateCountersUI(); renderChatList(); renderCurrentChat();
+  }
+  function saveSessions() { localStorage.setItem("flowers_sessions_mobile", JSON.stringify(sessions)); }
+  function updateCountersUI() {
+    document.getElementById("hyacinth2Counter").innerText = `${dailyUsage.hyacinth2Used}/${HYACINTH2_LIMIT}`;
+    document.getElementById("visionCounter").innerText = `${dailyUsage.visionUsed}/${VISION_LIMIT}`;
+  }
+  function canUseModel(t) { return t === 'hyacinth2' ? dailyUsage.hyacinth2Used < HYACINTH2_LIMIT : dailyUsage.visionUsed < VISION_LIMIT; }
+  function incrementModel(t) { if(t==='hyacinth2') dailyUsage.hyacinth2Used++; else dailyUsage.visionUsed++; localStorage.setItem("flowers_daily_limits_mobile", JSON.stringify(dailyUsage)); updateCountersUI(); }
+  function escapeHtml(str) { return str.replace(/[&<>]/g, m => m==='&'?'&amp;': m==='<'?'&lt;':'&gt;'); }
+
+  function renderChatList() {
+    const container = document.getElementById("chatListContainer"); if(!container) return;
+    container.innerHTML = "";
+    Object.entries(sessions).sort((a,b)=>b[1].createdAt - a[1].createdAt).forEach(([id, sess]) => {
+      const div = document.createElement("div"); div.className = `chat-item ${currentChatId === id ? 'active' : ''}`;
+      const date = new Date(sess.createdAt); const timeStr = `${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+      div.innerHTML = `<div class="chat-info"><div class="chat-title">${escapeHtml(sess.title.substring(0,28))}</div><div class="chat-time">${timeStr}</div></div><button class="delete-chat" data-id="${id}"><i class="fas fa-trash-alt"></i></button>`;
+      div.querySelector(".delete-chat").addEventListener("click", (e) => { e.stopPropagation(); deleteChat(id); });
+      div.addEventListener("click", () => { currentChatId = id; renderCurrentChat(); renderChatList(); document.getElementById("sidebar").classList.remove("open"); });
+      container.appendChild(div);
+    });
+  }
+  function deleteChat(id) {
+    if(Object.keys(sessions).length === 1) { const newId = Date.now().toString(); sessions = { [newId]: { title: "New Chat", createdAt: Date.now(), messages: [] } }; currentChatId = newId; }
+    else { delete sessions[id]; if(currentChatId === id) currentChatId = Object.keys(sessions)[0]; }
+    saveSessions(); renderChatList(); renderCurrentChat();
+  }
+  function renderCurrentChat() {
+    const container = document.getElementById("chatMessages"); if(!container || !sessions[currentChatId]) return;
+    container.innerHTML = "";
+    sessions[currentChatId].messages.forEach(msg => {
+      const div = document.createElement("div"); div.className = `message ${msg.role === 'user' ? 'user-message' : 'assistant-message'}`;
+      let content = escapeHtml(msg.text);
+      if(msg.imageUrl) content += `<img src="${msg.imageUrl}" class="generated-image" onclick="window.open(this.src)">`;
+      let attHtml = msg.attachments?.length ? `<div class="attachments-preview">${msg.attachments.map(a=>`<span class="preview-file"><i class="fas fa-file-image"></i> ${escapeHtml(a.name)}</span>`).join('')}</div>` : "";
+      div.innerHTML = `<div class="bubble">${content}${attHtml}</div>`;
+      container.appendChild(div);
+    });
+    container.scrollTop = container.scrollHeight;
+  }
+  function addMessageToCurrent(role, text, attachments = [], imageUrl = null) {
+    sessions[currentChatId].messages.push({ role, text, attachments: attachments.map(f=>({name:f.name})), imageUrl });
+    if(sessions[currentChatId].messages.length === 1 && role === 'user') sessions[currentChatId].title = text.substring(0,40);
+    saveSessions(); renderCurrentChat(); renderChatList();
+  }
+  function handleFiles(files) {
+    for(let file of files) {
+      if(file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => { pendingFiles.push({ name: file.name, dataURL: e.target.result, isImage: true }); updateAttachmentPreview(); };
+        reader.readAsDataURL(file);
+      } else { pendingFiles.push({ name: file.name, isImage: false }); updateAttachmentPreview(); }
+    }
+  }
+  function updateAttachmentPreview() {
+    const container = document.getElementById("attachmentPreviewList");
+    if(!container) return;
+    container.innerHTML = pendingFiles.map((f, idx) => `<div class="attach-item"><i class="fas fa-paperclip"></i> ${escapeHtml(f.name)}<button class="remove-attach" data-idx="${idx}">x</button></div>`).join('');
+    document.querySelectorAll('.remove-attach').forEach(btn => btn.addEventListener('click', (e) => { const idx = parseInt(btn.dataset.idx); pendingFiles.splice(idx,1); updateAttachmentPreview(); }));
+  }
+  async function callHyacinth2(msg, lang, atts=[]) {
+    const content = [{ type: "text", text: msg }];
+    for (let a of atts) if(a.isImage && a.dataURL) content.push({ type: "image_url", image_url: a.dataURL });
+    const resp = await fetch(MISTRAL_URL, { method:"POST", headers:{"Content-Type":"application/json","Authorization":`Bearer ${MISTRAL_API_KEY}`}, body: JSON.stringify({ model: MISTRAL_VISION_MODEL, messages:[{ role:"system", content:`You are Hyacinth 2. Respond in ${lang}. Use structured formatting.` },{ role:"user", content }], temperature:0.75 }) });
+    if(!resp.ok) throw new Error(); const data = await resp.json(); return data.choices[0].message.content;
+  }
+  async function generateImage(prompt) { const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=512&height=512`; const r=await fetch(url); return URL.createObjectURL(await r.blob()); }
+  async function callVision(prompt) { if(!canUseModel('vision')) throw new Error("Vision limit"); const img=await generateImage(prompt); incrementModel('vision'); return { text:`🌸 Image for: "${prompt}"`, imageUrl:img }; }
+  async function sendMessage() {
+    if(isProcessing) return;
+    const input = document.getElementById("userInput");
+    let text = input.value.trim(); if(!text && !pendingFiles.length) return;
+    if(!text && pendingFiles.length) text = "Analyze these images.";
+    const atts = [...pendingFiles]; const lang = document.getElementById("languageSelect").value;
+    addMessageToCurrent('user', text, atts); input.value = ""; pendingFiles = []; updateAttachmentPreview();
+    const intended = document.getElementById("modelSwitch").value;
+    if(!canUseModel(intended)) { document.getElementById("globalWarning").innerText = "Daily limit reached."; setTimeout(()=>document.getElementById("globalWarning").innerText="",3000); return; }
+    isProcessing = true; const typingId = addTypingIndicator();
+    try {
+      if(intended === 'vision') {
+        const {text:reply, imageUrl} = await callVision(text);
+        removeTypingIndicator(typingId); addMessageToCurrent('assistant', reply, [], imageUrl);
+        document.getElementById("activeModelBadge").innerHTML = "Vision active";
+      } else {
+        const reply = await callHyacinth2(text, lang, atts);
+        incrementModel('hyacinth2');
+        removeTypingIndicator(typingId); addMessageToCurrent('assistant', reply);
+        document.getElementById("activeModelBadge").innerHTML = "Hyacinth 2 active";
+      }
+    } catch(e) { removeTypingIndicator(typingId); addMessageToCurrent('assistant', `Error: ${e.message}`); }
+    finally { isProcessing = false; }
+  }
+  function addTypingIndicator() { const c=document.getElementById("chatMessages"); const id="typing-"+Date.now(); const d=document.createElement("div"); d.id=id; d.className="message assistant-message"; d.innerHTML=`<div class="bubble"><div class="typing-indicator">🌸 Thinking</div></div>`; c.appendChild(d); c.scrollTop=c.scrollHeight; return id; }
+  function removeTypingIndicator(id) { const el=document.getElementById(id); if(el) el.remove(); }
+
+  // Agent Prime with 50/3h limit
+  const AGENT_LIMIT = 50, AGENT_HOURS = 3;
+  let agentUsage = { count: 0, windowStart: null };
+  function loadAgentLimit() { const stored = localStorage.getItem("agent_prime_usage_mobile"); if(stored) agentUsage=JSON.parse(stored); if(agentUsage.windowStart && Date.now()-agentUsage.windowStart > AGENT_HOURS*3600000) agentUsage={ count:0, windowStart:null }; localStorage.setItem("agent_prime_usage_mobile", JSON.stringify(agentUsage)); updateAgentDisplay(); }
+  function updateAgentDisplay() { const remaining = AGENT_LIMIT - agentUsage.count; const info=document.getElementById("agentLimitInfo"); if(info) info.innerText = remaining>0 ? `${remaining}/${AGENT_LIMIT} left` : "Locked"; document.getElementById("agentSendBtn").disabled = remaining<=0; }
+  function canSendAgent() { if(agentUsage.count>=AGENT_LIMIT && agentUsage.windowStart && Date.now()-agentUsage.windowStart > AGENT_HOURS*3600000) { agentUsage={ count:0, windowStart:null }; localStorage.setItem("agent_prime_usage_mobile", JSON.stringify(agentUsage)); updateAgentDisplay(); return true; } return agentUsage.count < AGENT_LIMIT; }
+  function incAgent() { if(!agentUsage.windowStart) agentUsage.windowStart=Date.now(); agentUsage.count++; localStorage.setItem("agent_prime_usage_mobile", JSON.stringify(agentUsage)); updateAgentDisplay(); }
+
+  const agentModal = document.getElementById("agentPrimeModal");
+  const agentMessages = document.getElementById("agentMessages");
+  const agentInput = document.getElementById("agentUserInput");
+  const agentSend = document.getElementById("agentSendBtn");
+  const closeAgent = document.getElementById("closeAgentModal");
+  const agentBtn = document.getElementById("agentPrimeBtn");
+
+  function addAgentMsg(text, user) { const div=document.createElement("div"); div.className=`agent-message ${user?'agent-user':'agent-bot'}`; div.innerText=text; agentMessages.appendChild(div); agentMessages.scrollTop=agentMessages.scrollHeight; }
+  async function sendAgentMsg() {
+    const txt = agentInput.value.trim(); if(!txt) return;
+    if(!canSendAgent()) { addAgentMsg(`⏳ Limit of ${AGENT_LIMIT} msgs / ${AGENT_HOURS}h reached.`, false); return; }
+    addAgentMsg(txt, true); agentInput.value="";
+    const typing = document.createElement("div"); typing.className="agent-message agent-bot"; typing.innerText="Typing..."; agentMessages.appendChild(typing);
+    try {
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method:"POST", headers:{"Content-Type":"application/json","Authorization":`Bearer ${GROQ_API_KEY}`},
+        body: JSON.stringify({ model:"llama-3.3-70b-versatile", messages:[{role:"system",content:"You are Agent Prime, helpful AI."},{role:"user",content:txt}], temperature:0.7 })
+      });
+      const data = await res.json(); typing.remove();
+      if(data.error) addAgentMsg("Error: "+data.error.message, false);
+      else { addAgentMsg(data.choices[0].message.content, false); incAgent(); }
+    } catch(e) { typing.remove(); addAgentMsg("Network error.", false); }
+  }
+  agentSend.addEventListener("click", sendAgentMsg);
+  agentInput.addEventListener("keypress", (e) => { if(e.key==="Enter") sendAgentMsg(); });
+  agentBtn.addEventListener("click", () => { agentModal.classList.add("active"); loadAgentLimit(); });
+  closeAgent.addEventListener("click", () => agentModal.classList.remove("active"));
+  agentModal.addEventListener("click", (e) => { if(e.target===agentModal) agentModal.classList.remove("active"); });
+
+  // Main event listeners
+  document.getElementById("sendBtn").addEventListener("click", sendMessage);
+  document.getElementById("userInput").addEventListener("keydown", (e) => { if(e.key==="Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+  document.getElementById("menuToggle").addEventListener("click", () => document.getElementById("sidebar").classList.add("open"));
+  document.getElementById("closeSidebarBtn").addEventListener("click", () => document.getElementById("sidebar").classList.remove("open"));
+  document.getElementById("newChatBtn").addEventListener("click", () => { const newId=Date.now().toString(); sessions[newId]={ title:"New Chat", createdAt:Date.now(), messages:[] }; currentChatId=newId; saveSessions(); renderChatList(); renderCurrentChat(); document.getElementById("sidebar").classList.remove("open"); });
+  document.getElementById("attachBtn").addEventListener("click", () => document.getElementById("fileInput").click());
+  document.getElementById("cameraBtn").addEventListener("click", () => document.getElementById("cameraInput").click());
+  document.getElementById("fileInput").addEventListener("change", (e) => handleFiles(Array.from(e.target.files)));
+  document.getElementById("cameraInput").addEventListener("change", (e) => handleFiles(Array.from(e.target.files)));
+
+  loadData(); loadAgentLimit();
+</script>
+</body>
+</html>
